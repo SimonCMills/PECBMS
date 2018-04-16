@@ -1,0 +1,180 @@
+---
+title: "Making comparisons between original datasets and additional datasets"
+output: html_document
+---
+
+## Overview
+Investigating differences between the datasets that Jana initially sent through and the 'full' datasets that contained the data sent through initially as well as data that had been dropped for failing checks. The reason for failing checks was unclear: could be as a result of data quality issues, or as a result of index not being constructed for the scheme or species. Clearly we are interested in all site data, not just data for which an index is created, so if there is evidence that species or schemes are being dropped for reasons other than data quality we are keen to make use of it. More importantly, if there are schemes that get dropped on range edges (..because the species is patchily distributed in these, and so index not constructed at scheme level) data is being lost in regions that climatic sensitivity may be high. The key question is therefore whether the data suggest that species data has been dropped because it is not used to form a PECBMS index, rather than it being due to issues with underlying data quality. If it is the case that entire schemes are present in the extra datasets that aren't present in the original datasets it strongly suggests that the schemes are being dropped because an index is not formed for them rather than it being purely an issue with data quality. 
+
+## Details 
+There were major mismatches between the old and new datasets, to the extent that I was getting almost a complete lack of congruence between the two when I was attempting to merge them. This has taken ages to get the bottom of, but I'm satisfied it has now been solved. I still don't fully understand what the issue was, but it was something to do with the sitekey that relates the site ids in the base datasets to their unique site ids. Having been back over the original scripts and been really cautious about column format- i.e. converting everything to character format correctly and avoiding any of factor-related nonsense- the two datasets now correspond well (i.e. almost all observations in the old dataset are in the new dataset).
+
+That being said, there are still a minority of datapoints that are in the old dataset but not in the new. This shouldn't be the case, as the old dataset should be a subset of the full newer dataset. Based on my checks this applies to ~1400 rows, i.e. a tiny minority of datapoints, and seems to be a case of being -1 (i.e. NA) in the new dataset and 0 in the old. This also shouldn't be the case: the columns are observed counts and should be invariant. However, as it is so few datapoints I am simply removing them rather than enquiring further, for the following reasons: (1) I'm not concerned about this being an issue with my formatting as I checked and the issue is present in the base datasets I recieved, and (2) I'm also not concerned about this evidence of inconsistencies in the base datasets as I've checked the two datasets and, with the exception of these ~1400 observations, all the observations that are present in both are exactly identical. 
+
+Note: In the interests of filesize I've only plotted species with >10000 datapoints in the original datasets (but all species are included in the table)
+
+## Conclusions
+There is a clear pattern in the sites that are getting dropped. For a given species there are either no sites that are getting dropped or an entire scheme/schemes is/are getting dropped. Further, this rarely applies for species for which there are typically many observations and it's for species with fewer observations that tend to see the largest gains (table at end of document). There are also species such as Greylag or Sand Martin that don't have a PECBMS index at all, but these data clearly are reported to PECBMS by at least some countries as they are present in the extra datasets. Additionally, there are clearly cases where schemes are being dropped along range edges, e.g. Chiffchaff. 
+
+Importantly, all of the species that don't gain additional sites in the new datasets also show no differences in the number of datapoints between the old and extra datasets, i.e. there is no evidence of datapoints getting dropped on the basis of data-quality. While this doesn't mean that there are no issues with data-quality, it suggests that the data present in the new, fuller dataset is no more subject to data quality issues than the dataset received originally. As it appears to be factors other than data quality driving the dropping of schemes and their data, we should be able to use any additional schemes from the new datasets without being concerns about them having lower data quality. 
+     
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+## This chunk is just reading in and formatting
+# housekeeping
+require(data.table); require(ggplot2); require(dplyr);
+require(gridExtra); require(maps)
+
+# set theme
+theme_default <- theme_classic() +
+    theme(strip.text.x = element_text(hjust=0, size = 12, face="italic"), 
+          strip.background = element_rect(colour=NA, fill=NA),
+          plot.title = element_text(hjust=0, size = 14, face="bold"), 
+          axis.line.x = element_line(colour ="black"), 
+          axis.line.y = element_line(colour ="black"),
+          axis.text.x = element_text(angle=90))
+
+theme_set(theme_default)
+
+## First, need to read in new count files and format
+files <- list.files("../recievedFiles/PECBMS_extraFiles/counts/csv/", full.names=TRUE)
+speciesKey <- readRDS("../cleanedFiles/dataKey_Euring-species.rds")
+countryNames <- gsub(".*counts_(.*).csv", "\\1", files)
+dat <- lapply(files, function(x) fread(x, showProgress = FALSE))
+
+# Formatting. Throwing away "NA" (-1) rows
+getDat <- function(x) {
+    x[ObservedCount != -1, list(Euring, site=Site, year = CountYear, count_t = ObservedCount)]
+}
+datasets <- lapply(dat,getDat)
+names(datasets) <- countryNames
+# minor formatting of cols 
+datasets <- lapply(datasets, function(x) x[,Euring := as.character(Euring)])
+datasets <- lapply(datasets, function(x) x[,site := as.character(site)])
+
+
+# put scheme col in datasets list
+for(i in seq(datasets)) {datasets[[i]]$scheme <- countryNames[i]}
+
+# now want to bind scheme information in
+siteKey_old <- readRDS("../cleanedFiles/dataKey_site-scheme-uniqueSiteID-lat-lon.rds")
+speciesKey_old <- readRDS("../cleanedFiles/dataKey_Euring-species.rds")
+setkey(siteKey_old, NULL)
+
+## Formatting old and new data to make identical
+## Note: only keeping sites that have climateData
+cols <- c("species", "species_LB", "Euring", "schemeID", "siteID", "site", "lat_WGS84", "lon_WGS84", "year", "count_t")
+PECBMS_new <- rbindlist(datasets) %>% 
+    merge(., 
+          siteKey_old[,list(scheme, schemeID, site, siteID, lat_WGS84, lon_WGS84)], 
+          by=c("scheme", "site")) %>%
+    merge(., speciesKey, by="Euring") %>%
+    #.[hasClimate == TRUE,] %>%
+    .[,.SD,.SDcols=cols]
+setkey(PECBMS_new, NULL)
+
+allData_old <- readRDS("../cleanedFiles/countData_allSchemes.rds") %>% 
+    merge(., siteKey_old[,list(scheme, schemeID, site, siteID, lat_WGS84, lon_WGS84)], 
+          by=c("schemeID", "siteID")) %>%
+    merge(., speciesKey, by="Euring") %>%
+    #.[hasClimate == TRUE,] %>%
+    .[,.SD,.SDcols=cols]
+setkey(allData_old, NULL)
+PECBMS_old <- allData_old[!schemeID %in% c("FRA.0", "UKI.0")]
+```
+
+```{r, warning=FALSE, message=FALSE}
+## Check 1: are old files a subset of the new files. 
+
+# how many extra rows in new datasets?
+nrow(PECBMS_new)/nrow(PECBMS_old)
+
+# merge the two datasets, keeping all obs
+PECBMS_oldNewMerge <- merge(PECBMS_new, PECBMS_old, by=c("species_LB", "siteID", "year"), 
+                            all=TRUE, suffixes = c("", "_old"))
+
+## which are the observations that are in old but not in new? 
+oldOnly <- PECBMS_oldNewMerge[!is.na(schemeID_old) & is.na(schemeID)]
+
+## Number of rows in old that aren't in new
+nrow(oldOnly) ## 1428 rows are in old but aren't in new
+nrow(oldOnly)/nrow(PECBMS_oldNewMerge) ##0.00027 rows in old only aren't in new
+unique(oldOnly$schemeID_old) ## these are all in Denmark or Spain Catalonia 
+
+## if I look at the obs that are in both, perfect correspondence
+with(PECBMS_oldNewMerge[complete.cases(PECBMS_oldNewMerge),],
+     any(count_t != count_t_old))
+
+PECBMS_oldNewMerge[complete.cases(PECBMS_oldNewMerge) & count_t != count_t_old,]
+
+```
+
+```{r, warning=FALSE, message=FALSE, fig.height= 11.69, fig.width=8.27, echo=FALSE}
+## summary of nDP change
+PECBMS_new <- copy(PECBMS_oldNewMerge[!is.na(schemeID),])
+PECBMS_old <- copy(PECBMS_oldNewMerge[complete.cases(PECBMS_oldNewMerge),])
+
+toSave <- rbind(allData_old[schemeID %in% c("FRA.0", "UKI.0"),], PECBMS_new[,.SD, .SDcols=cols])
+saveRDS(toSave, "../cleanedFiles/countData_allSchemes_extraData.rds")
+
+
+DPchange <- merge(PECBMS_new[,list(n_PECBMS = .N), by=list(species)], 
+                  PECBMS_old[,list(n_PECBMS = .N), by=list(species)],
+                  by="species", suffixes=c("_new", "_old"), all=TRUE)
+
+allData_N <- allData_old[,list(n_allData_old = .N), by=species]
+
+DPchange <- merge(allData_N, DPchange, by="species", all.x=TRUE)
+setorderv(DPchange, "n_allData_old", order=-1)
+ 
+# Creating PECBMS_new and PECBMS_old for comparison as I have done above should be fine, 
+# but just to be extra sure that the resulting 'n_PECBMS_old' is correctly measuring 
+# the number of observations per species in the original datasets, having removed the 
+# 1428 abberant values, have redone with the initial datasets (rather than using the 
+# merged versions). This finds all n_PECBMS_old to be exactly the same. 
+checkPECBMSOldVals <- merge(allData_old[!schemeID %in% c("FRA.0", "UKI.0"),], 
+                            oldOnly, 
+                            all.x=TRUE, 
+                            by=c("species_LB", "siteID", "year"), 
+                            suffixes=c("", "_oldOnly"))
+checkPECBMSOldVals <- merge(checkPECBMSOldVals[is.na(count_t_old),.N, by=species], DPchange, by="species")
+paste("any inconsistency in numbers in n_PECBMS_old?", any(checkPECBMSOldVals$N != checkPECBMSOldVals$N_old))
+
+DPchange <- DPchange[,proportionChange := (n_allData_old + n_PECBMS_new - n_PECBMS_old)/n_allData_old]            
+## now, discard the observations that are in old, but not in new and plot
+PECBMS_new_sites <- unique(PECBMS_new[is.na(site_old),list(species, 
+                                            species_LB, 
+                                            lat_WGS84, 
+                                            lon_WGS84)])
+PECBMS_old_sites <- unique(PECBMS_old[,list(species, 
+                                            species_LB, 
+                                            lat_WGS84, 
+                                            lon_WGS84)])
+
+# get also just FrUK sites
+UKFra_sites <- unique(allData_old[schemeID %in% c("UKI.0", "FRA.0"), list(species, 
+                                                                          species_LB, 
+                                                                          lat_WGS84, 
+                                                                          lon_WGS84)])
+
+species_toPlot <- unique(DPchange[n_allData_old > 10000, species])
+par(mfrow=c(2,1))
+for(i in seq(species_toPlot)) {
+    newSites <- PECBMS_new_sites[species == species_toPlot[i]]
+    oldSites <- PECBMS_old_sites[species == species_toPlot[i]]
+    frUKSites <- UKFra_sites[species == species_toPlot[i], ]
+    DPinfo <- DPchange[species==species_toPlot[i], ]
+    DPinfo[is.na(n_PECBMS_old), n_PECBMS_old := 0]; DPinfo[is.na(n_PECBMS_new), n_PECBMS_new := 0]
+    titleText <- paste0(species_toPlot[i],": ", nrow(newSites), " new sites \n nOriginal DP:",
+                        DPinfo$n_allData_old, "\n nNewDP: ", with(DPinfo, n_allData_old +n_PECBMS_new-n_PECBMS_old))
+    map(database="world",ylim=c(30, 70), col="grey96", xlim=c(-10, 35), fill = TRUE)
+    mtext(titleText, side=4, las=1, adj=0, line=1.2, cex=1, font=2); 
+    points(lat_WGS84~lon_WGS84, data=oldSites, col="grey40", pch=16, cex=.8)
+    points(lat_WGS84~lon_WGS84, data=frUKSites, col="grey40", pch=16, cex=.8)
+    points(lat_WGS84~lon_WGS84, data=newSites, col="red", pch=16, cex=.8)
+}
+```
+
+```{r kable}
+require(knitr)
+kable(DPchange, digits=2)
+```

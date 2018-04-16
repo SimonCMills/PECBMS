@@ -1,0 +1,56 @@
+---
+title: 'PECBMS documentation: storage, formatting, and data-checking'
+output:
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+  html_document:
+    css: styles.css
+    toc: yes
+date: 'created: 3 August 2016'
+---
+
+# Overview
+The <div class="file"> PECBMS </div> directory contains all formatting and storage of bird datasets. Various formatting steps to travel from the initial files received to a final consolidated dataset with all files in the same format- these should, *I hope*, be well documented enough to follow readily and check. 
+
+Note: I've done no filtering or selection of data, which is done in each analysis chapter. Each chapter should just take the cleaned files directly from the _cleanedFiles_ directory, and apply whatever data filtering is required.  
+
+## _ArcGIS_ 
+Redundant ArcGIS files that I had used initially to sort out site coordinate systems. Have since replaced this with doing it all in R, but kept these in case of future use. 
+
+## _cleanedFiles_
+contains the finalised clean datasets, for use in subsequent modelling.
+
+- <div class="file"> dataKey_Euring-species.rds </div> is generated in `createKey_Euring-speciesID.R` (Note script runs fine and is well documented)
+
+- <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> and <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> are generated in `create_cleanedDF_allSchemes_newVersion_simplified.R` (Note that this is the new version in which the site IDs are unique because scheme is appended, but they retain their original site ID in the suffix. Once I have finished sorting out and re-ordering all of this I should change the name)
+
+- <div class="file"> coordinateData_noSpain.rds</div> is the siteID:coordinate key, using they updated site IDs (original site id as the suffix). The formatting and documentation associated with this is in `format_siteCoordinates.rds`. Took great pains to ensure that site indexing is correct and coordinate conversion is also correct. 
+
+## _counts_ 
+contains extracted and formatted count files (but not with unique site ID yet). This initial set of formatting is carried out with the `create_cleaned<French, UK, PECBMS>Data.R` scripts, and simply takes each set of data files, formats them to a shared format (colnames: Euring [chr], site [chr], year [int], count_t [int]), and then saves them again as separate country files (.rds).
+
+## _figures_
+Figures that have been generated at various points to get a handle on data, etc.
+
+## _junk_
+Outdated files. 
+
+## _misc_
+A variety of files that contain various metadata I have been sent (at varying points..), as well as files that I generated at the time in order to figure out what the data looked like, how they were organised, etc.
+
+##  _recievedFiles_ 
+contains datasets as sent, with no alterations
+
+- subdirectory <div class="file"> PECBMS_original </div> is all the PECBMS files that were sent through following Jana's initial quality checks. There are a series of sub-directories which are unpackaging the zip files:
+    - <div class="file"> zip </div>, contains the raw zipped files
+    - <div class="file"> counts </div>, the raw count files in access and csv format (identical, each csv created from each access file)
+    - <div class="file"> speciesLists </div>, contains the species lists provided with each scheme
+    - <div class="file"> coords </div> are the raw coordinate files extracted from the zip file
+- subdirectory <div class="file"> PECBMS_extraFiles </div> is the PECBMS files that failed Jana's quality checks but we subsequently requested anyway (she could not confirm what the reason for failure was, but based on my exploration, it appeared to just occur through countries not creating a breeding bird index for a given species- see "checking extra data" rmd file). These only contain count data, all the site coordinates, species lists, etc. are in the original set. 
+- subdirectory <div class="file"> UK </div> are the UK BBS data that were sent through directly rather than through PECBMS.
+- subdirectory <div class="file"> France </div> is the french counts that were also sent through directly, rather than through PECBMS. 
+
+## _scripts_
+self-explanatory

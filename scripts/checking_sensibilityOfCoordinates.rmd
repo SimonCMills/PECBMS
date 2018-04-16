@@ -1,0 +1,192 @@
+---
+title: "Checking coordinates"
+date: "5 June 2016"
+output: html_document
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+## Fill here
+require(maptools); require(data.table); require(mapview); require(gplots)
+
+qualityCheck <- function(countryID_input, schemeID_input) {
+    #countryID_input = "UK"; schemeID_input = "UKI.0"
+    country_i <- countries[countries$CNTR_ID == countryID_input,]
+    proj4string(country_i) <- CRS("+proj=longlat +datum=WGS84")
+    siteKey_i <- siteKey[schemeID == schemeID_input,]
+    
+    siteKey_spatial <- SpatialPointsDataFrame(coords = siteKey_i[,list(lon_WGS84, lat_WGS84)], 
+                                              data=siteKey_i[,list(siteID)],
+                                              proj4string = CRS("+proj=longlat +datum=WGS84"))
+    
+    output <- over(siteKey_spatial, country_i)
+    droppedSites <- siteKey_i[!complete.cases(output), siteID]
+    # return visual output
+    siteKey_spatial@data$inBorder <- factor(complete.cases(output)+1, levels=c(1,2))
+    m <- mapView(country_i) +
+        mapView(siteKey_spatial, cex=5, zcol="inBorder",  color =col2hex(c("red", "lightblue")),
+                alpha.regions=1)
+    
+    list("nDroppedSites" = nrow(siteKey_i)-nrow(output[complete.cases(output),]), 
+         droppedSites, m)
+}
+
+
+countries <- readShapePoly(
+    "../files/countryShapeFiles_hiRes/CNTR_2014_03M_SH/Data/worldMap_subset_countriesWithData_clippedToEurope_10kmBuffer.shp"
+    )
+proj4string(countries) <- CRS("+proj=longlat +datum=WGS84")
+
+siteKey <- readRDS("../files/dataKey_site-scheme-siteID-lat-lon.rds")
+#siteKey$coordGood <- TRUE
+
+countryIDs <- countries@data$CNTR_ID
+lostSites <- list()
+# some dropped sites, but actually these are just Isle of Man and Channel Islands
+plot_map <- function(countryID_input, schemeID_input) {
+    country_i <- countries[countries$CNTR_ID == countryID_input,]
+    proj4string(country_i) <- CRS("+proj=longlat +datum=WGS84")
+    siteKey_i <- siteKey[schemeID == schemeID_input,]
+    
+    siteKey_spatial <- SpatialPointsDataFrame(coords = siteKey_i[,list(lon_WGS84, lat_WGS84)], 
+                                              data=siteKey_i[,list(siteID)],
+                                              proj4string = CRS("+proj=longlat +datum=WGS84"))
+    
+    output <- over(siteKey_spatial, country_i)
+    droppedSites <- siteKey_i[!complete.cases(output), siteID]
+    siteKey_spatial@data$inBorder <- factor(complete.cases(output)+1, levels=c(1,2))
+
+    m <- leaflet(country_i) %>%
+        addPolygons(col="black", group = "country") %>%
+        addProviderTiles("OpenStreetMap", group = "OpenStreetMap") %>% 
+        addCircleMarkers(group = "sites",
+                         lng = coordinates(siteKey_spatial)[, 1],
+                         lat = coordinates(siteKey_spatial)[, 2],
+                         color = ~ifelse(inBorder==1, "red", "lightblue"), 
+                         weight=.01, 
+                         opacity=1, fillOpacity=1, data=siteKey_spatial) %>%
+        addLayersControl(overlayGroups = c("country", "sites"))
+     list("nDroppedSites" = nrow(siteKey_i)-nrow(output[complete.cases(output),]), 
+         droppedSites, m)
+}
+```
+
+Country polygons obtained here: http://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/
+
+Added a 10km buffer to these, and then checked that coordinates for sites fell within these. Sites which have no coordinates (as in the case of Wallonia) end up on the equator, as ArcGIS assigned them coordinates of (0,0).
+
+Sites falling outside of 10km buffer are identified in __red__, otherwise they are __blue__. 
+
+Notes: 
+(1) not all plotted here, to save filesize.
+(2) this is before removal for not being in climate surface- points that are on the coast will typically get dropped at this stage.
+
+# Belgium Brussels
+No issues. 
+```{r, echo=FALSE}
+plot_map(countryID_input = "BE", schemeID_input = "BEL.B")[[3]]
+```
+
+# Belgium Wallonia 
+-- FAILED: 243 sites don't have coordinates
+```{r, echo=FALSE}
+plot_map(countryID_input = "BE", schemeID_input = "BEL.W")[[3]]
+```
+
+# Czech Republic
+No issues.
+```{r, echo=FALSE}
+plot_map(countryID_input = "CZ", schemeID_input = "CZE.0")[[3]]
+```
+
+
+# Denmark 
+A single point lies outside of the border, not on a land mass.
+```{r, echo=FALSE}
+plot_map(countryID_input = "DK", schemeID_input = "DEN.0")[[3]]
+```
+
+lostSites$Denmark <- qualityCheck(countryID_input = "DK", schemeID_input = "DEN.0")[[2]]
+
+# Germany East 
+No issues.
+```{r, echo=FALSE}
+plot_map(countryID_input = "DE", schemeID_input = "GER.E")[[3]]
+```
+
+
+# Germany West 
+There's one dropped point, but actually on 'Dune', an island just off the coast.
+This will get dropped at climate surface stage
+```{r, echo=FALSE}
+plot_map(countryID_input = "DE", schemeID_input = "GER.W")[[3]]
+```
+
+
+# Estonia
+No issues.
+```{r, echo=FALSE}
+plot_map(countryID_input = "EE", schemeID_input = "EST.0")[[3]]
+```
+
+
+# Spain
+No issues.
+```{r, echo=FALSE}
+plot_map(countryID_input = "ES", schemeID_input = "SPA.0")[[3]]
+```
+
+
+# Spain (Catalonia)
+No issues.
+```{r, echo=FALSE}
+#plot_map(countryID_input = "ES", schemeID_input = "SPA.C")[[3]]
+```
+
+
+# Finland
+A few sites lying outside of the 10km buffer zone on the border. Will remove on this basis
+```{r, echo=FALSE}
+plot_map(countryID_input = "FI", schemeID_input = "FIN.0")[[3]]
+#lostSites$Finland <- qualityCheck(countryID_input = "FI", schemeID_input = "FIN.0")[[2]]
+```
+
+# Netherlands
+No issues- unfortuantely lots on the coast though, which will get dropped for lack of climate surface.
+```{r, echo=FALSE}
+#plot_map(countryID_input = "NL", schemeID_input = "NET.0")[[3]]
+# All good, and coordinates appear high-precision. Sadly lots on the coast though!
+```
+
+
+# Sweden Old
+A single point outside of 10km buffer. I'm really not sure about the precision of
+these coordinates- in south east (and elsewhere) can find points that are not on 
+the landmass.
+```{r, echo=FALSE}
+plot_map(countryID_input = "SE", schemeID_input = "SWE.O")[[3]]
+# A single point outside, but I'm really not sure about the precision of these coordinates! 
+#lostSites$Sweden_Old <- qualityCheck(countryID_input = "SE", schemeID_input = "SWE.O")[[2]]
+```
+
+# Sweden New
+No issue with points outside, but have the same concern about precision. R.G is adamant that they represent site-level coordinates though, so..
+```{r, echo=FALSE}
+plot_map(countryID_input = "SE", schemeID_input = "SWE.N")[[3]]
+```
+
+
+# France
+No issues.
+```{r, echo=FALSE}
+#plot_map(countryID_input = "FR", schemeID_input = "FRA.0")[[3]]
+# All coordinates appear good, and to high level of precision
+```
+
+
+# UK 
+No issues, a few points fall outside, but this is just because the country polygon I used doesn't have Isle of Man etc. in it rather than them actually being incorrect. 
+```{r, echo=FALSE}
+#plot_map(countryID_input = "UK", schemeID_input = "UKI.0")[[3]]
+
+## note: at some point need to shift full functionality of the R version of this across into this rmd version
+```
