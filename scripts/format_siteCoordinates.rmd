@@ -1,0 +1,794 @@
+---
+title: "Formatting site coordinates and associated documentation/checks"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+## Overview
+All sites need to be correctly transformed to a shared coordinate system (WGS1984). It's also crucial that sites are correctly indexed to correspond to sites in PECBMS count dataframes (note that for France and UK the datasets were sent in a format with all the data in a shared dataframe already). Information used in decision making is logged, and a few simple checks are carried out. Finally, each country is plotted. 
+
+```{r, message=F, echo=F, warning=F}
+library(data.table); library(xlsx); library(dplyr); library(rgdal); library(ggplot2); 
+require(maptools); require(mapview); require(gplots)
+
+# helper functions
+coordCheck <- function(count, coord) all(unique(count) %in% unique(coord))
+f2n <- function(x) as.numeric(as.character(x))
+createMaps <- function(x){
+        leaflet(data = x) %>% 
+            addProviderTiles("OpenStreetMap", group = "OpenStreetMap") %>% 
+            addCircleMarkers(group = "sites",
+                             lng = coordinates(x)[, 1],
+                             lat = coordinates(x)[, 2],
+                             radius=5, 
+                             color="red",
+                             stroke = FALSE, fillOpacity = 0.8,
+                             data=x)
+}
+
+
+# Country shape files
+# Country polygons obtained here:
+# http://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/
+countries <- readShapePoly("../files/countryShapeFiles_hiRes/CNTR_2014_03M_SH/Data/worldMap_subset_countriesWithData_clippedToEurope_10kmBuffer.shp")
+proj4string(countries) <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+
+# count and coordinate dataframes
+fnames_count <- list.files("../recievedFiles/PECBMS_originalFiles/counts/csv/", 
+                           full.names=T)
+
+fnames_coord <- list.files("../recievedFiles/PECBMS_originalFiles/coords/", 
+                           full.names=T)
+
+# scheme key
+schemeKey <- data_frame(country = c("Belgium_Brussels", "Belgium_Wallonia", "Czech",
+                                     "Denmark", "Estonia", "Finland", "France", "Germany_East", 
+                                     "Germany_West", "Netherlands", "Spain", "Spain_Catalonia", 
+                                     "Sweden_New", "Sweden_Old", "UK"), 
+                         schemeID = c("BEL.B", "BEL.W", "CZE.0", "DEN.0", "EST.0", 
+                                      "FIN.0", "FRA.0", "GER.0", "GER.0", 
+                                      "NET.0", "SPA.0", "SPA.C", "SWE.N", "SWE.O", "UKI.0"))
+# list to catch each country's coords
+cleanedCoords <- list()
+```
+
+# proj4 coordinate systems
+```{r proj4}
+# coordinate systems
+LamII <- CRS("+proj=lcc +lat_1=46.8 +lat_0=46.8 +lon_0=0 +k_0=0.99987742 +x_0=600000 +y_0=2200000 +a=6378249.2 +b=6356515 +towgs84=-168,-60,320,0,0,0,0 +pm=paris +units=m +no_defs")
+
+ETRS89 <- CRS("+proj=longlat +ellps=GRS80 +no_defs")
+
+WGS84 <- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+
+LamBelge72 <- CRS("+proj=lcc +lat_1=51.16666723333333 +lat_2=49.8333339 +lat_0=90 +lon_0=4.367486666666666 +x_0=150000.013 +y_0=5400088.438 +ellps=intl +towgs84=106.869,-52.2978,103.724,-0.33657,0.456955,-1.84218,1 +units=m +no_defs")
+
+UTM32 <- CRS("+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+
+KKJ <- CRS("+proj=longlat +ellps=intl +towgs84=-96.062,-82.428,-121.753,-4.801,-0.345,1.376,1.496 +no_defs")
+
+AMERSFRT <- CRS("+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 +x_0=155000 +y_0=463000 +ellps=bessel +units=m +no_defs")
+
+ESTONIA92 <- CRS("+proj=lcc +lat_1=59.33333333333334 +lat_2=58 +lat_0=57.51755393055556 +lon_0=24 +x_0=500000 +y_0=6375000 +ellps=GRS80 +towgs84=0.055,-0.541,-0.185,0.0183,-0.0003,-0.007,-0.014 +units=m +no_defs")
+```
+
+
+# Belgium: Brussels
+Straight forward
+
+- single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- format from Lambert Belge II to WGS84
+```{r, message=F, echo=F}
+i <- 1
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", all(counts_i$Site %in% coords_i$site))
+paste0("any duplicated sites? ", any(duplicated(coords_i$site)))
+
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Belgium_Brussels") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", site))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+# format WGS84
+sp_i <- clean_i %>%
+    select(x = CENTREX, y = CENTREY) %>%
+    mutate(x=f2n(x), y=f2n(y)) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = LamBelge72)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Belgium: Wallonia region
+Straight forward
+
+- No ambiguity in site column: single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- Already in WGS84 format
+```{r, message=F, echo=F}
+i <- 2
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$plot_ID))
+paste0("any duplicated sites? ", any(duplicated(coords_i$plot_ID)))
+
+# Already formatted to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Belgium_Wallonia") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", plot_ID)) %>%
+    mutate(lon_WGS84 = f2n(X1), lat_WGS84 = f2n(Y1)) %>%
+    # Wallonia has the additional complication that 243 sites have (0,0) coordinates
+    # (out of 4199).
+    ## Remove these.
+    filter(!(lon_WGS84 == 0 & lat_WGS84==0))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Czech Republic
+Straight forward
+
+- No ambiguity in site column: single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- note: have elected to use municipality coordinates,on the basis these are quite 
+accurate anyway (most accurate to 2km)
+- Already in WGS84
+```{r, message=F, echo=F}
+i <- 3
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site))
+paste0("any duplicated sites? ", any(duplicated(coords_i$Site)))
+
+clean_i <- coords_i %>% 
+    mutate(country = "Czech") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", Site)) %>%
+    mutate(lon_WGS84 = f2n(municipality_LON), lat_WGS84 = f2n(municipality_LAT))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+
+```
+
+# Denmark
+Straight forward
+
+- No ambiguity in site column: single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- In UTM zone 32 format
+```{r, message=F, echo=F}
+i <- 4
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$RouteID))
+paste0("any duplicated sites? ", any(duplicated(coords_i$RouteID)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Denmark") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", RouteID), 
+           x = Easting, y = Northing,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y)) %>%
+    # single site that doesn't have coordinates, but has (0,0) as (N, E). 
+    # Other missing coordinate sites actually have blanks for (N, E)
+    filter(!RouteID == 3458)
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+# format WGS84
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = UTM32)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Estonia
+Straight forward
+
+- No ambiguity in site column: single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- In Estonia'92 coordinate system (see CRS for details). 
+- No missing coordinates
+```{r, message=F, echo=F}
+i <- 5
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$site))
+paste0("any duplicated sites? ", any(duplicated(coords_i$site)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Estonia") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", site), 
+           x = X_COORD, y = Y_COORD,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = ESTONIA92)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Finland
+Straight forward
+
+- No ambiguity in site column: single site ID column in coordinate df
+- all 'Site' values in count df are found in corresponding column of coord df
+- In KKJ coordinate system
+- No missing sites
+```{r, message=F, echo=F}
+i <- 6
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site))
+paste0("any duplicated sites? ", any(duplicated(coords_i$site)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Finland") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", Site), 
+           x = lon, y = kkj.decimal.lat,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = KKJ)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Germany: East
+
+- Some ambiguity in site column- several code columns- but the Sites in the count dataframe are all integer valued, wheras routecodes are not. The 'Site in F1 data' column additionally corresponds to the sites in the count df
+- all 'Site' values in count df are found in corresponding column of coord df
+- In WGS84 already
+- No missing coordinates
+```{r, message=F, echo=F}
+i <- 7
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 2)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$site.in.F1.data))
+paste0("any duplicated sites? ", any(duplicated(coords_i$site.in.F1.data)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Germany_East") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", site.in.F1.data), 
+           x = long.in..shp, y = lat.in..shp,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    mutate(lon_WGS84 = x, lat_WGS84 = y) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Germany: West
+
+- Some ambiguity in site column- several code cols- but the Sites in the count dataframe are all integer valued, wheras routecodes are not. The 'Site in F1' column additionally corresponds to the sites in the count df
+- Additional complication is that I am merging Germany E and Germany W into the same df (there are no methodological differences between schemes, split is just for historical reasons). Therefore, siteIDs have to be unique across both schemes, rather than just internally. Have checked and they are unique. 
+- Two sites in the count dataframe are not in the site dataframe. Will just remove these
+- An additional 1 site has no coordinates
+- Already in WGS84
+```{r, message=F, echo=F}
+i <- 8
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 2)
+
+# check that there is no overlap in site IDs between dataframes: there isn't
+coords_GE <- read.xlsx2(fnames_coord[[7]], 2)
+paste0("any non-unique ids across German schemes?: ",
+       any(coords_GE$site.in.F1.data %in% coords_i$Site.in.F1.data) |
+           any(coords_i$Site.in.F1.data %in% coords_GE$site.in.F1.data))
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site.in.F1.data))
+# which(!unique(counts_i$Site) %in% coords_i$Site.in.F1.data)
+paste0("any duplicated sites? ", any(duplicated(coords_i$Site.in.F1.data)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Germany_West") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", Site.in.F1.data), 
+           x = long.in..shp, y = lat.in..shp,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    mutate(lon_WGS84 = x, lat_WGS84 = y) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Netherlands
+
+- No ambiguity in site column 
+- all 'Site' values in count df are found in corresponding column of coord df
+- In Amersfoort coordinate system
+- No missing coordinates
+```{r, message=F, echo=F}
+i <- 9
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site))
+paste0("any duplicated sites? ", any(duplicated(coords_i$Site)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Netherlands") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", Site), 
+           x = X, y = Y,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = AMERSFRT)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Spain 
+
+- Have not been able to supply site IDs, but rather have a KML file to 10km grid level. 
+- Will process separately
+```{r, message=F, echo=F}
+i <- 10
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+# counts_i <- fread(fnames_count[[i]])
+# coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+# 
+# paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site))
+# paste0("any duplicated sites? ", any(duplicated(coords_i$Site)))
+# 
+# cleanedCoords[[i]] <- coords_i %>% 
+#     mutate(country = "Netherlands") %>%
+#     left_join(., schemeKey) %>%
+#     mutate(siteID = paste0(schemeID, ":", Site))
+```
+
+# Catalonia
+
+- No ambiguity in site column 
+- all 'Site' values in count df are found in corresponding column of coord df
+- In WGS84 coordinate system
+```{r, message=F, echo=F}
+i <- 11
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$SITE))
+paste0("any duplicated sites? ", any(duplicated(coords_i$SITE)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Spain_Catalonia") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", SITE), 
+           x = LONGITUDE, y = LATITUDE,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    mutate(lon_WGS84 = x, lat_WGS84 = y) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Sweden: New
+
+- No ambiguity in site column 
+- all 'Site' values in count df are found in corresponding column of coord df
+- "Each route is a 8 km line transect, shaped as a square (2 km x 2 km). The coordinate is the centerpoint of this "square", thus a point where no counting was carried out. But the point nearest to all counts."
+- In WGS84 format
+```{r, message=F, echo=F}
+i <- 12
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Route.))
+paste0("any duplicated sites? ", any(duplicated(coords_i$Route.)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Sweden_New") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", Route.), 
+           x = wgs84_lon, y = wgs84_lat,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    mutate(lon_WGS84 = x, lat_WGS84 = y) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Sweden: Old
+
+- No ambiguity in site column 
+- all 'Site' values in count df are found in corresponding column of coord df
+- In WGS84 coordinate system
+```{r, message=F, echo=F}
+i <- 13
+# straight forward- just a single site ID column
+print(fnames_count[[i]])
+print(fnames_coord[[i]])
+
+counts_i <- fread(fnames_count[[i]], showProgress = F)
+coords_i <- read.xlsx2(fnames_coord[[i]], 1)
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$ROTUE.))
+paste0("any duplicated sites? ", any(duplicated(coords_i$ROTUE.)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Sweden_Old") %>%
+    left_join(., schemeKey) %>%
+    mutate(siteID = paste0(schemeID, ":", ROTUE.), 
+           x = wgs84_lon, y = wgs84_lat,
+           x=f2n(x), y=f2n(y)) %>%
+    filter(!is.na(x)|!is.na(y))
+
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    mutate(lon_WGS84 = x, lat_WGS84 = y) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+
+# France and UK
+- Were sent the dataframes directly, which have counts and coordinates in the same dataframe. Therefore need to process slightly differently. 
+- UK already in WGS84 format
+```{r, message=F, echo=F}
+i <- 14
+# need to process separately. 
+files <- list.files("../recievedFiles/UK/", 
+                    pattern = ".csv", full.names=TRUE, recursive=TRUE)
+# extract the id file from the list and remove
+speciesKey <- fread(files[grepl("btolist", files)], showProgress = F)
+files <- files[!grepl("btolist", files)]
+
+getDF <- function(filename) {
+    file_i <- fread(filename)
+    Euring <- speciesKey[Two.letter.code == unique(file_i$sp),Euring_code]
+    file_i[!is.na(count), list(site=square, ETRS89Lat, ETRS89Long)]
+}
+
+clean_i <- lapply(files, getDF) %>%
+    bind_rows(.) %>%
+    unique %>%
+    mutate(schemeID = "UKI.0", siteID = paste0(schemeID, ":", site),
+           x = ETRS89Long, y = ETRS89Lat,
+           x=f2n(x), y=f2n(y))
+
+# missing coord?
+print("No missing coord, duplicates etc.")
+
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = ETRS89)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+
+
+## France
+i <- 15
+clean_i <- fread("../recievedFiles/France/stoc_1989_2015.csv", showProgress = F) %>%
+    select(SITE, X, Y, XlamII, YlamII) %>%
+    unique %>%
+    mutate(schemeID = "FRA.0", siteID=paste0(schemeID, ":", SITE), 
+           x = X, y = Y,
+           x=f2n(x), y=f2n(y))
+
+# missing coord?
+print("No missing coord, duplicates etc.")
+
+sp_i <- clean_i %>%
+    select(x, y) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = LamII)
+
+trans_i <- spTransform(sp_i, WGS84)
+
+cleanedCoords[[i]] <- coordinates(trans_i) %>%
+    as_data_frame %>%
+    select(lon_WGS84=1, lat_WGS84=2) %>%
+    bind_cols(clean_i, .) %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
+```
+
+# Save
+```{r}
+coordinates_full <- bind_rows(cleanedCoords)
+saveRDS(coordinates_full, "../cleanedFiles/coordinateData_noSpain.rds")

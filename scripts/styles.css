@@ -1,0 +1,23 @@
+.R {
+    color: #c51b45;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.file {
+    color: #0f7eec;
+    font-weight: bold;
+    display: inline;
+}
+
+
+
+.reveal section del {
+  color: red;
+}
+
+
+.emphasized {
+   font-size: 1.2em;
+}
+
