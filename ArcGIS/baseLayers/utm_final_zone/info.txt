@@ -1,0 +1,17 @@
+Global UTM zones grid as ESRI shapefile.
+
+Point of contact: Dr. Richard Cooper | EPDI: http://www.enviroprojects.org/contact-us  | SEA START RC: http://www.start.or.th
+
+Shapefile created in GRASS using v.mkgrid, v.patch, v.clean, v.category, v.to.db, v.out.ogr
+
+Coordinate reference system: WGS84. 
+
+Date created: 23 July 2012.
+
+
+USE CONSTRAINTS:
+Data is released under the CreativeCommons Licence - Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0) - accessible at http://creativecommons.org/licenses/by-nc-sa/3.0/
+
+Users to acknowledge the EnviroProjects Digital Initiative (EPDI: http://www.enviroprojects.org) as the source.
+             
+
