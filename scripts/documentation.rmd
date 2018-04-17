@@ -1,12 +1,12 @@
 ---
 title: 'PECBMS documentation: storage, formatting, and data-checking'
 output:
-  word_document:
+  html_document:
+    css: styles.css
     toc: yes
   pdf_document:
     toc: yes
-  html_document:
-    css: styles.css
+  word_document:
     toc: yes
 date: 'created: 3 August 2016'
 ---
@@ -53,4 +53,6 @@ contains datasets as sent, with no alterations
 - subdirectory <div class="file"> France </div> is the french counts that were also sent through directly, rather than through PECBMS. 
 
 ## _scripts_
-self-explanatory
+self-explanatory. 
+
+- `checkCoords_CzechRepublic.R` looks at the correspondence between municipality level coordinates and site-level coordinates (as some sites do not have the latter). Most municipality coordinates lie close to the site coordinates (<2km), and the largest discrepancy is still less than 10km. 
