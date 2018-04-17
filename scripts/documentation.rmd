@@ -24,7 +24,7 @@ contains the finalised clean datasets, for use in subsequent modelling.
 
 - <div class="file"> dataKey_Euring-species.rds </div> is generated in `createKey_Euring-speciesID.R` (Note script runs fine and is well documented)
 
-- <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> and <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> are generated in `create_cleanedDF_allSchemes_newVersion_simplified.R` (Note that this is the new version in which the site IDs are unique because scheme is appended, but they retain their original site ID in the suffix. Once I have finished sorting out and re-ordering all of this I should change the name)
+- <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> and <div class="file"> countData_allSchemes_extraPECBMSfiles.rds</div> are generated in `create_fullCountDF.R` (Note that this is the new version in which the site IDs are unique because scheme is appended, but they retain their original site ID in the suffix).
 
 - <div class="file"> coordinateData_noSpain.rds</div> is the siteID:coordinate key, using they updated site IDs (original site id as the suffix). The formatting and documentation associated with this is in `format_siteCoordinates.rds`. Took great pains to ensure that site indexing is correct and coordinate conversion is also correct. 
 
