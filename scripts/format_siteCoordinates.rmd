@@ -547,24 +547,42 @@ createMaps(forPlot_i)
 
 # Spain 
 
-- Have not been able to supply site IDs, but rather have a KML file to 10km grid level. 
-- Will process separately
+- Have not been able to supply site IDs, but rather have a KML file to 10km grid level. I've converted these from KML to shape in ArcMap, and then formatted in `create_formatSpanishCoordinates.R`. The processing is thus slightly different here than for other countries
+- Note that, while 11 sites are dropped, these are all island sites that have a 5x5km coordinate, but not a 10x10km. (can easily see this by querying ArcMap attribute table). Given that I won't include these in analysis anyway, this isn't a problem
 ```{r, message=F, echo=F}
 i <- 10
 # straight forward- just a single site ID column
 print(fnames_count[[i]])
 print(fnames_coord[[i]])
 
-# counts_i <- fread(fnames_count[[i]])
-# coords_i <- read.xlsx2(fnames_coord[[i]], 1)
-# 
-# paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$Site))
-# paste0("any duplicated sites? ", any(duplicated(coords_i$Site)))
-# 
-# cleanedCoords[[i]] <- coords_i %>% 
-#     mutate(country = "Netherlands") %>%
-#     left_join(., schemeKey) %>%
-#     mutate(siteID = paste0(schemeID, ":", Site))
+counts_i <- fread(fnames_count[[i]])
+coords_i <- readRDS("../recievedFiles/Spain_coordinates/coordinates_WGS84.rds")
+
+
+paste0("all count sites in coord sites? ", coordCheck(counts_i$Site, coords_i$siteID))
+# which(!unique(counts_i$Site) %in% coords_i$Site.in.F1.data)
+paste0("any duplicated sites? ", any(duplicated(coords_i$siteID)))
+
+# format to WGS84
+clean_i <- coords_i %>% 
+    mutate(country = "Spain", schemeID="SPA.0", siteID=paste0(schemeID, ":", siteID)) %>%
+    filter(!is.na(lon_WGS84)|!is.na(lat_WGS84))
+# missing coord?
+missing_coord <- clean_i %>%
+    summarise(n_missing = nrow(coords_i) - n(), p_missing = (n_missing/nrow(coords_i)))
+print("missing coord?")
+print(missing_coord)
+
+cleanedCoords[[i]] <- clean_i %>%
+    select(schemeID, siteID, lon_WGS84, lat_WGS84)
+
+# plot
+forPlot_i <- cleanedCoords[[i]] %>%
+    select(x = lon_WGS84, y = lat_WGS84) %>%
+    as.data.frame %>%
+    SpatialPoints(., proj4string = WGS84)
+
+createMaps(forPlot_i)
 ```
 
 # Catalonia

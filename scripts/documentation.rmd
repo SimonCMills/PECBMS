@@ -12,12 +12,12 @@ date: 'created: 3 August 2016'
 ---
 
 # Overview
-The <div class="file"> PECBMS </div> directory contains all formatting and storage of bird datasets. Various formatting steps to travel from the initial files received to a final consolidated dataset with all files in the same format- these should, *I hope*, be well documented enough to follow readily and check. 
+The **PECBMS** directory contains all formatting and storage of bird datasets. Various formatting steps to travel from the initial files received to a final consolidated dataset with all files in the same format- these should, *I hope*, be well documented enough to follow readily and check. 
 
 Note: I've done no filtering or selection of data, which is done in each analysis chapter. Each chapter should just take the cleaned files directly from the _cleanedFiles_ directory, and apply whatever data filtering is required.  
 
 ## _ArcGIS_ 
-Redundant ArcGIS files that I had used initially to sort out site coordinate systems. Have since replaced this with doing it all in R, but kept these in case of future use. 
+Largely redundant ArcGIS files that I had used initially to sort out site coordinate systems. Have since replaced most of this with R code, but kept these in case of future use. The only exception to this is the file used to convert Spains 10x10km UTM KML file to a shape file. 
 
 ## _cleanedFiles_
 contains the finalised clean datasets, for use in subsequent modelling.
@@ -49,6 +49,7 @@ contains datasets as sent, with no alterations
     - <div class="file"> speciesLists </div>, contains the species lists provided with each scheme
     - <div class="file"> coords </div> are the raw coordinate files extracted from the zip file
 - subdirectory <div class="file"> PECBMS_extraFiles </div> is the PECBMS files that failed Jana's quality checks but we subsequently requested anyway (she could not confirm what the reason for failure was, but based on my exploration, it appeared to just occur through countries not creating a breeding bird index for a given species- see "checking extra data" rmd file). These only contain count data, all the site coordinates, species lists, etc. are in the original set. 
+- subdirectory <div class="file"> Spain_coordinates </div> has a series of coordinate files that were necessary to move from the KML file sent to a formatted set of coordinates. ArcMap used for the conversion, and subsequent formatting done in `create_formatSpanishCoordinates.R`.
 - subdirectory <div class="file"> UK </div> are the UK BBS data that were sent through directly rather than through PECBMS.
 - subdirectory <div class="file"> France </div> is the french counts that were also sent through directly, rather than through PECBMS. 
 
