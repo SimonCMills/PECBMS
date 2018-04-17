@@ -809,4 +809,4 @@ createMaps(forPlot_i)
 # Save
 ```{r}
 coordinates_full <- bind_rows(cleanedCoords)
-saveRDS(coordinates_full, "../cleanedFiles/coordinateData_noSpain.rds")
+saveRDS(coordinates_full, "../cleanedFiles/dataKey_siteID-WGS84coord.rds")
