@@ -1,11 +1,11 @@
 ## checking Czech coordinates. How different are 'site' coords and 'municipality' coords. 
 require(dplyr); require(ggplot2); require(sp)
 coords <- xlsx::read.xlsx("recievedFiles/PECBMS_originalFiles/coords/sites_Czech.xls", 1)
-
+totalCoords <- nrow(coords)
 # remove NA values as no comparison to be made
 coords <- coords %>% 
     filter(!is.na(first_point_LON))
-
+nrow(coords)/totalCoords
 
 
 municipality <- coords %>% 
