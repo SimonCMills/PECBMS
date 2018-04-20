@@ -46,8 +46,10 @@ data_full <- rbindlist(data_count)
 data_full[,siteID:=paste0(schemeID, ":", site)]
 summary(data_full)
 
+
+
 # save
-saveRDS(data_full, "cleanedFiles/countData_allSchemes_originalPECBMSfiles.rds")
+saveRDS(dplyr::as_data_frame(data_full), "cleanedFiles/countData_allSchemes_originalPECBMSfiles.rds")
 
 ################################################################################
 # create full dataframe for all datasets (using *extra* PECBMS files)
@@ -61,4 +63,4 @@ data_full <- rbindlist(data_count)
 data_full[,siteID:=paste0(schemeID, ":", site)]
 
 # save
-saveRDS(data_full, "cleanedFiles/countData_allSchemes_extraPECBMSfiles.rds")
+saveRDS(dplyr::as_data_frame(data_full), "cleanedFiles/countData_allSchemes_extraPECBMSfiles.rds")
