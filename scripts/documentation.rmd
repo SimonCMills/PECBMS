@@ -16,6 +16,7 @@ The **PECBMS** directory contains all formatting and storage of bird datasets. V
 
 Note: I've done no filtering or selection of data, which is done in each analysis chapter. Each chapter should just take the cleaned files directly from the _cleanedFiles_ directory, and apply whatever data filtering is required.  
 
+# Directories
 ## _ArcGIS_ 
 Largely redundant ArcGIS files that I had used initially to sort out site coordinate systems. Have since replaced most of this with R code, but kept these in case of future use. The only exception to this is the file used to convert Spains 10x10km UTM KML file to a shape file. 
 
