@@ -12,7 +12,7 @@ require(data.table); require(xlsx); require(dplyr)
 
 # read in dataset (provided as single file with all species, but with 0 counts 
 # removed). As per advice from coordinators "zero fill" sites.
-frenchDat <- fread("../recievedFiles/France/stoc_1989_2015.csv")
+frenchDat <- fread("recievedFiles/France/stoc_1989_2015.csv")
 frenchDat[,c("Ordre", "Famille", "NomF", "NomS", "XclimLamII", "YclimLamII") := NULL]
 
 # zero filling sites. First create skeleton of all site:year combinations for all 
@@ -33,7 +33,7 @@ frenchDat_full[is.na(N), N := 0]
 
 ## now add Euring information to this full dataframe
 # First, read in key translating french codes to Euring number, and tidy up
-frenchSpecies <- read.xlsx2("../recievedFiles/France/FrenchNames_EUcodes.xlsx", 1)
+frenchSpecies <- read.xlsx2("recievedFiles/France/FrenchNames_EUcodes.xlsx", 1)
 frenchSpecies <- data.table(frenchSpecies[complete.cases(frenchSpecies),])
 frenchSpecies <- frenchSpecies[Euring.Code != "",]
 frenchSpecies <- frenchSpecies[,list(ESPECE = as.character(French.Code), Euring = Euring.Code)]
