@@ -44,14 +44,11 @@ for(i in seq(data_count)) {
 data_full <- rbindlist(data_count)
 # make siteID unique by pasting together with the scheme identifier
 data_full[,siteID:=paste0(schemeID, ":", site)]
-summary(data_full)
 
-
-
-# save
+# save (note that you now save as dplyr object)
 saveRDS(dplyr::as_data_frame(data_full), "cleanedFiles/countData_allSchemes_originalPECBMSfiles.rds")
 
-################################################################################
+## Repeat process but using additional files ----
 # create full dataframe for all datasets (using *extra* PECBMS files)
 data_count <- lapply(files_count_extra, readRDS)
 for(i in seq(data_count)) {
