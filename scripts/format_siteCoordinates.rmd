@@ -8,7 +8,7 @@ All sites need to be correctly transformed to a shared coordinate system (WGS198
 
 ```{r, message=F, echo=F, warning=F}
 library(data.table); library(xlsx); library(dplyr); library(rgdal); library(ggplot2); 
-require(maptools); require(mapview); require(gplots)
+require(maptools); require(mapview); require(gplots); library(leaflet)
 
 # helper functions
 coordCheck <- function(count, coord) all(unique(count) %in% unique(coord))
@@ -774,12 +774,17 @@ createMaps(forPlot_i)
 
 ## France
 i <- 15
+# note the na.omit. France has a bunch of sites (n=670) sites that are duplicated
+# (i.e. have identical site numbers and X and Y coordinates) but are missing 
+# XlamII and YlamII coordinates. The na.omit is simply to remove these to leave
+# 2458 sites.
 clean_i <- fread("../recievedFiles/France/stoc_1989_2015.csv", showProgress = F) %>%
     select(SITE, X, Y, XlamII, YlamII) %>%
     unique %>%
     mutate(schemeID = "FRA.0", siteID=paste0(schemeID, ":", SITE), 
            x = X, y = Y,
-           x=f2n(x), y=f2n(y))
+           x=f2n(x), y=f2n(y)) %>% 
+    na.omit
 
 # missing coord?
 print("No missing coord, duplicates etc.")
